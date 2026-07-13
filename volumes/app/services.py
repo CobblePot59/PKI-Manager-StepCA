@@ -3,6 +3,7 @@ Service layer: talks to step-ca's own HTTP API (no subprocess, no docker
 socket) to revoke and issue certificates, both via the "jwk" provisioner.
 """
 
+import base64
 import time
 import uuid
 
@@ -10,6 +11,7 @@ import requests
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa, ed25519
+from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 
 import config
@@ -114,14 +116,29 @@ def _build_csr(key, cn: str, sans: list, cert_type: str) -> bytes:
     return csr.public_bytes(serialization.Encoding.PEM)
 
 
-def issue_certificate(cn: str, sans: list, key_type: str = "ec256", cert_type: str = "server") -> tuple:
+def _build_pkcs12(key, cert_pem: str, ca_pem: str, cn: str, password: str) -> bytes:
+    cert = x509.load_pem_x509_certificate(cert_pem.encode())
+    ca_certs = [x509.load_pem_x509_certificate(ca_pem.encode())] if ca_pem else None
+    encryption = (
+        serialization.BestAvailableEncryption(password.encode())
+        if password else serialization.NoEncryption()
+    )
+    return pkcs12.serialize_key_and_certificates(
+        cn.encode(), key, cert, ca_certs, encryption,
+    )
+
+
+def issue_certificate(cn: str, sans: list, key_type: str = "ec256", cert_type: str = "server",
+                       p12_password: str = "") -> tuple:
     """
     Generates a keypair + CSR and has step-ca sign it via the "jwk"
     provisioner's HTTP /1.0/sign endpoint (the same flow `step ca certificate`
     uses under the hood). `cert_type` ("server" or "client") steers the leaf
     template's extKeyUsage — see CERT_TYPE_OID above. Returns (ok, result)
-    where result is either {"cert_pem": ..., "chain_pem": ..., "key_pem": ...}
-    or an error string.
+    where result is either
+    {"cert_pem": ..., "chain_pem": ..., "key_pem": ..., "p12_b64": ...}
+    or an error string. `p12_password` protects the bundled PKCS#12 private
+    key; an empty string produces an unencrypted (but still valid) bundle.
     """
     sans = sans or [cn]
     if cn not in sans:
@@ -159,8 +176,11 @@ def issue_certificate(cn: str, sans: list, key_type: str = "ec256", cert_type: s
     if not cert_pem:
         return False, "CA response did not include a certificate."
 
+    p12_bytes = _build_pkcs12(key, cert_pem, ca_pem, cn, p12_password)
+
     return True, {
         "cert_pem": cert_pem,
         "chain_pem": cert_pem + (ca_pem or ""),
         "key_pem": key_pem,
+        "p12_b64": base64.b64encode(p12_bytes).decode(),
     }

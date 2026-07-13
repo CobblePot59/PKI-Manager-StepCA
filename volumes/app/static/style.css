@@ -177,7 +177,7 @@ header button.refresh:hover { border-color: var(--accent); color: var(--accent);
 .issue-actions button:hover:not(:disabled) { opacity: 0.92; }
 .issue-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.issue-downloads { display: none; flex-direction: row; justify-content: center; gap: 28px; margin-top: 16px; }
+.issue-downloads { display: none; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 20px 28px; margin-top: 16px; }
 .issue-downloads.show { display: flex; }
 .dl-link {
   display: inline-flex; align-items: center; gap: 6px;

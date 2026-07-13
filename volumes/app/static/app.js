@@ -172,6 +172,16 @@ function downloadText(filename, text) {
   URL.revokeObjectURL(url);
 }
 
+function downloadBase64(filename, b64, mimeType) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
 if (ISSUE_ENABLED) {
   let lastIssued = null;
 
@@ -202,6 +212,10 @@ if (ISSUE_ENABLED) {
     e.preventDefault();
     if (lastIssued) downloadText(`${lastIssued.cn}.key`, lastIssued.key_pem);
   });
+  document.getElementById("dlP12").addEventListener("click", (e) => {
+    e.preventDefault();
+    if (lastIssued) downloadBase64(`${lastIssued.cn}.p12`, lastIssued.p12_b64, "application/x-pkcs12");
+  });
 
   document.getElementById("issueForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -210,16 +224,17 @@ if (ISSUE_ENABLED) {
     const sans = document.getElementById("issueSans").value
       .split(",").map(s => s.trim()).filter(Boolean);
     const key_type = document.getElementById("issueKeyType").value;
+    const p12_password = document.getElementById("issueP12Password").value;
     const btn = document.getElementById("issueSubmit");
     btn.disabled = true; btn.textContent = "Issuing…";
     try {
       const r = await fetch("/api/issue", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cn, sans, key_type, cert_type })
+        body: JSON.stringify({ cn, sans, key_type, cert_type, p12_password })
       });
       const j = await r.json();
       if (j.ok) {
-        lastIssued = { cn, cert_pem: j.cert_pem, chain_pem: j.chain_pem, key_pem: j.key_pem };
+        lastIssued = { cn, cert_pem: j.cert_pem, chain_pem: j.chain_pem, key_pem: j.key_pem, p12_b64: j.p12_b64 };
         showResult();
         toast(`Certificate issued for ${cn}.`, "ok");
         load();

@@ -118,6 +118,7 @@ def api_issue():
     sans = [s.strip() for s in (data.get("sans") or []) if s.strip()]
     key_type = data.get("key_type") or "ec256"
     cert_type = data.get("cert_type") or "server"
+    p12_password = data.get("p12_password") or ""
 
     if not _valid_hostname(cn):
         abort(400, "Invalid Common Name.")
@@ -129,7 +130,7 @@ def api_issue():
     if cert_type not in ("server", "client"):
         abort(400, "Invalid certificate type.")
 
-    ok, result = services.issue_certificate(cn, sans, key_type, cert_type)
+    ok, result = services.issue_certificate(cn, sans, key_type, cert_type, p12_password)
     if ok:
         return jsonify({"ok": True, **result})
     return jsonify({"ok": False, "error": result}), 500

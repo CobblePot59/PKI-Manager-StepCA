@@ -29,8 +29,9 @@ pki/
 │   │   ├── asgi.py              # ASGI wrapper (uvicorn entrypoint)
 │   │   ├── config.py            # config + secrets loading (reads ca.json for CA_DNS)
 │   │   ├── models.py            # DB access + X.509 parsing
-│   │   ├── services.py          # step-ca HTTP API (revocation)
+│   │   ├── services.py          # step-ca HTTP API (revocation, issuance)
 │   │   ├── routes.py            # Flask views
+│   │   ├── utils.py             # X.509 parsing helpers
 │   │   ├── static/     (style.css, app.js)
 │   │   └── templates/  (index.html, login.html)
 │   ├── db/                      # PostgreSQL data (generated)
@@ -46,6 +47,7 @@ pki/
 ├── docs/
 │   └── dashboard.png            # dashboard screenshot (used below)
 ├── docker-compose.yml
+├── LICENSE
 └── README.md
 ```
 
@@ -66,7 +68,7 @@ pki/
                      │  pki-db (PostgreSQL)            │
                      │                                │
    browsers ────▶80──│  pki-http (nginx)              │
-   Windows DCs       │    ├─ /intermediate_ca.crl     │
+                     │    ├─ /intermediate_ca.crl     │
                      │    ├─ /intermediate_ca.crt      │
                      │    └─ /  →  dashboard           │
                      └───────────────────────────────┘
@@ -251,11 +253,13 @@ below), it can also revoke and issue certificates.
   issuance) — no docker socket, no subprocess.
 - **Issuing a certificate** (the "Issue certificate" button): pick a
   certificate type (server or client — sets `extKeyUsage` to `serverAuth` or
-  `clientAuth`), CN, optional SANs, and a key algorithm (EC P-256/P-384/P-521,
-  RSA 2048/3072/4096). The dashboard generates the keypair and CSR
-  server-side, has step-ca sign it over its `/1.0/sign` API, and gives you
-  explicit download buttons for the certificate, the full chain, and the
-  private key. None of it is ever stored — if you lose the key, issue a new
+  `clientAuth`), CN, optional SANs, a key algorithm (EC P-256/P-384/P-521,
+  RSA 2048/3072/4096), and an optional PKCS#12 password. The dashboard
+  generates the keypair and CSR server-side, has step-ca sign it over its
+  `/1.0/sign` API, and gives you explicit download buttons for the
+  certificate, the full chain, the private key, and a PKCS#12 (`.p12`) bundle
+  (cert + key + chain, encrypted with the given password — or unencrypted if
+  left blank). None of it is ever stored — if you lose the key, issue a new
   certificate. The server/client choice is carried to step-ca as a private,
   non-critical CSR extension that only `leaf.tpl.tmpl` reads (see the comment
   at its top); it's never copied into the issued certificate.
