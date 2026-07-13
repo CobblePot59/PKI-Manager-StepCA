@@ -22,7 +22,7 @@ pki/
 │   ├── app/                    # read-only Flask dashboard, served over ASGI (bind-mounted)
 │   │   ├── app.py  asgi.py  config.py
 │   │   ├── static/     (style.css, app.js)
-│   │   └── templates/  (index.html)
+│   │   └── templates/  (index.html, login.html)
 │   ├── db/                     # PostgreSQL data (generated)
 │   ├── nginx/
 │   │   ├── nginx-pki.conf      # CRL/AIA distribution + dashboard proxy
@@ -92,6 +92,15 @@ docker compose up -d
 
 The init script prints the **root CA fingerprint** — note it; clients use it to
 bootstrap trust.
+
+The dashboard requires login on first visit — its default `admin` password is
+printed once to the container logs on first boot:
+
+```bash
+docker compose logs pki-dashboard | grep "default dashboard user"
+```
+
+See [The dashboard](#the-dashboard) for creating additional users.
 
 ---
 
@@ -217,7 +226,10 @@ reads directly from the step-ca PostgreSQL database and parses each certificate.
   step-ca's HTTP API using a provisioner-signed token — no docker socket, no
   subprocess.
 
-### Enable basic auth
+### Extra layer: nginx basic auth
+
+The dashboard already requires its own login (above). If you want a second,
+network-level gate in front of it too:
 
 ```bash
 htpasswd -c volumes/nginx/htpasswd admin
@@ -273,6 +285,10 @@ docker exec pki-db pg_dump -U stepca stepca > stepca-$(date +%F).sql
 - Use a dedicated provisioner per automation domain so a leaked password grants
   access to that provisioner only, never the intermediate key.
 - TLS is restricted to 1.2–1.3 with ECDHE suites (see `ca.json`).
+- Dashboard logins are never stored in plaintext: `dashboard_users.password_hash`
+  holds a salted scrypt hash (via Werkzeug), and the Flask session-signing key
+  lives in a `dashboard_settings` table — both in the `stepca` Postgres
+  database, never in a file or environment variable.
 
 ---
 
@@ -280,12 +296,21 @@ docker exec pki-db pg_dump -U stepca stepca > stepca-$(date +%F).sql
 
 ```bash
 docker compose down            # stop services, keep data
-docker compose down -v         # also remove the PostgreSQL volume
+rm -rf volumes/db              # also wipe the PostgreSQL data (destructive — bind mount, not a
+                                # named volume, so `docker compose down -v` does NOT remove it)
 rm -rf volumes/stepca secrets volumes/nginx/intermediate_ca.crt   # remove CA material (destructive)
 rm -rf root-ca-offline         # remove the root vault (destructive — keep a backup!)
 ```
+
+> **Windows + Docker Desktop:** if `pki-db` fails health checks with
+> `initdb: error: could not change permissions of directory ".../pgdata":
+> Operation not permitted`, a previous, still-running (or crash-looping)
+> `pki-db` container likely still held the bind mount when `volumes/db` was
+> wiped. Run `docker compose down` **first** to fully stop and remove the
+> containers, *then* `rm -rf volumes/db` and `docker compose up -d` again.
 
 ---
 
 *Reference deployment for the `example.com` domain. Hostnames, validity periods,
 and subjects should be adjusted to your environment.*
+
