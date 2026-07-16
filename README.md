@@ -45,7 +45,10 @@ pki/
 ├── secrets/                     # generated passwords (gitignored)
 ├── root-ca-offline/             # generated root vault (gitignored)
 ├── docs/
-│   └── dashboard.png            # dashboard screenshot (used below)
+│   ├── dashboard.png            # dashboard screenshots (used below)
+│   ├── certificate-detail.png
+│   ├── issue-certificate.png
+│   └── issue-result.png
 ├── docker-compose.yml
 ├── LICENSE
 └── README.md
@@ -228,6 +231,27 @@ expiring / expired / revoked), key type, fingerprint, serial and provisioner.
 Click a row to see full certificate details. It reads directly from the
 step-ca PostgreSQL database and parses each certificate. If enabled (see
 below), it can also revoke and issue certificates.
+
+<details>
+<summary>More screenshots (certificate detail, issuance)</summary>
+
+**Certificate detail** — clicking a row shows the full parsed certificate:
+subject/issuer DN, SANs, serial, status, key type, fingerprint, validity and
+provisioner.
+
+![Certificate detail modal](docs/certificate-detail.png)
+
+**Issuing a certificate** — pick a type (server/client), CN, SANs and key
+algorithm:
+
+![Issue certificate form](docs/issue-certificate.png)
+
+The signed certificate, chain, private key and a PKCS#12 bundle are offered
+for download immediately after issuance — none of it is stored server-side:
+
+![Issue certificate result](docs/issue-result.png)
+
+</details>
 
 - Reachable only through nginx (`http://<CA_DNS>/`), never exposed directly.
 - **Login required.** Credentials live in a `dashboard_users` table in the
